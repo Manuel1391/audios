@@ -521,35 +521,35 @@
             
             // Función para parsear una línea de CSV correctamente
             function parseCSVLine(line) {
-                const values = [];
-                let currentValue = '';
-                let insideQuotes = false;
-                
-                for (let i = 0; i < line.length; i++) {
-                    const char = line[i];
-                    
-                    if (char === '"') {
-                        // Si estamos dentro de comillas y el siguiente carácter también es comilla, es una comilla escapada
-                        if (insideQuotes && i + 1 < line.length && line[i + 1] === '"') {
-                            currentValue += '"';
-                            i++; // Saltar la siguiente comilla
-                        } else {
-                            insideQuotes = !insideQuotes;
-                        }
-                    } else if (char === ',' && !insideQuotes) {
-                        // Fin de un valor
-                        values.push(currentValue);
-                        currentValue = '';
-                    } else {
-                        currentValue += char;
-                    }
-                }
-                
-                // Añadir el último valor
-                values.push(currentValue);
-                
-                return values;
+    const values = [];
+    let currentValue = '';
+    let insideQuotes = false;
+    
+    for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        
+        if (char === '"') {
+            // Si estamos dentro de comillas y el siguiente carácter también es comilla, es una comilla escapada
+            if (insideQuotes && i + 1 < line.length && line[i + 1] === '"') {
+                currentValue += '"';
+                i++; // Saltar la siguiente comilla
+            } else {
+                insideQuotes = !insideQuotes;
             }
+        } else if (char === ',' && !insideQuotes) {
+            // Fin de un valor - limpiar espacios y comillas sobrantes
+            values.push(currentValue.trim().replace(/^"|"$/g, ''));
+            currentValue = '';
+        } else {
+            currentValue += char;
+        }
+    }
+    
+    // Añadir el último valor - limpiar espacios y comillas sobrantes
+    values.push(currentValue.trim().replace(/^"|"$/g, ''));
+    
+    return values;
+}
             
             // Función para cargar frases desde Google Sheets
             async function loadPhrasesFromSheets() {
