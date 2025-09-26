@@ -491,33 +491,74 @@
                 }
             });
             
+            // Función para parsear CSV correctamente (maneja comas dentro de comillas)
+            function parseCSV(csvText) {
+                const lines = csvText.split('\n');
+                const result = [];
+                
+                if (lines.length === 0) return result;
+                
+                // Obtener encabezados
+                const headers = parseCSVLine(lines[0]);
+                
+                // Procesar cada línea
+                for (let i = 1; i < lines.length; i++) {
+                    if (lines[i].trim() === '') continue;
+                    
+                    const values = parseCSVLine(lines[i]);
+                    const obj = {};
+                    
+                    // Asignar valores según los encabezados
+                    headers.forEach((header, index) => {
+                        obj[header] = values[index] || '';
+                    });
+                    
+                    result.push(obj);
+                }
+                
+                return result;
+            }
+            
+            // Función para parsear una línea de CSV correctamente
+            function parseCSVLine(line) {
+                const values = [];
+                let currentValue = '';
+                let insideQuotes = false;
+                
+                for (let i = 0; i < line.length; i++) {
+                    const char = line[i];
+                    
+                    if (char === '"') {
+                        // Si estamos dentro de comillas y el siguiente carácter también es comilla, es una comilla escapada
+                        if (insideQuotes && i + 1 < line.length && line[i + 1] === '"') {
+                            currentValue += '"';
+                            i++; // Saltar la siguiente comilla
+                        } else {
+                            insideQuotes = !insideQuotes;
+                        }
+                    } else if (char === ',' && !insideQuotes) {
+                        // Fin de un valor
+                        values.push(currentValue);
+                        currentValue = '';
+                    } else {
+                        currentValue += char;
+                    }
+                }
+                
+                // Añadir el último valor
+                values.push(currentValue);
+                
+                return values;
+            }
+            
             // Función para cargar frases desde Google Sheets
             async function loadPhrasesFromSheets() {
                 try {
                     const response = await fetch(sheetsUrl);
                     const csvText = await response.text();
                     
-                    // Parsear CSV
-                    const lines = csvText.split('\n');
-                    const phrases = [];
-                    
-                    // Obtener encabezados
-                    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
-                    
-                    // Procesar cada línea (empezando desde la 1, ya que la 0 son los encabezados)
-                    for (let i = 1; i < lines.length; i++) {
-                        if (lines[i].trim() === '') continue;
-                        
-                        const values = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
-                        const phrase = {};
-                        
-                        // Asignar valores según los encabezados
-                        headers.forEach((header, index) => {
-                            phrase[header] = values[index] || '';
-                        });
-                        
-                        phrases.push(phrase);
-                    }
+                    // Parsear CSV correctamente
+                    const phrases = parseCSV(csvText);
                     
                     // Mostrar las frases en la lista
                     displayPhrases(phrases);
@@ -538,12 +579,15 @@
                 phrasesList.innerHTML = '';
                 
                 phrases.forEach(phrase => {
+                    // Verificar que la frase tenga contenido
+                    if (!phrase.Phrase || phrase.Phrase.trim() === '') return;
+                    
                     const phraseItem = document.createElement('div');
                     phraseItem.className = 'phrase-item';
                     
                     const phraseText = document.createElement('div');
                     phraseText.className = 'phrase-text';
-                    phraseText.textContent = phrase.Phrase || 'Frase no disponible';
+                    phraseText.textContent = phrase.Phrase;
                     
                     const phraseGuide = document.createElement('div');
                     phraseGuide.className = 'phrase-guide';
@@ -554,7 +598,7 @@
                     
                     // Al hacer clic en una frase, cargarla en los campos
                     phraseItem.addEventListener('click', () => {
-                        textInput.value = phrase.Phrase || '';
+                        textInput.value = phrase.Phrase;
                         guideInput.value = phrase.Guide || '';
                         
                         // Reproducir automáticamente si hay texto
@@ -565,6 +609,11 @@
                     
                     phrasesList.appendChild(phraseItem);
                 });
+                
+                // Si no se agregaron frases (todas estaban vacías)
+                if (phrasesList.children.length === 0) {
+                    phrasesList.innerHTML = '<div class="loading">No se encontraron frases válidas en el documento.</div>';
+                }
             }
             
             // Toggle para mostrar/ocultar la lista de frases
