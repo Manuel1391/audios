@@ -145,6 +145,13 @@
             box-shadow: none;
         }
         
+        .toggle-button {
+            background: linear-gradient(to right, #6a11cb, #2575fc);
+            padding: 10px 20px;
+            font-size: 14px;
+            margin: 10px 0;
+        }
+        
         .example {
             background-color: #e8f4ff;
             padding: 15px;
@@ -226,6 +233,15 @@
             color: #666;
         }
         
+        .hidden {
+            display: none;
+        }
+        
+        .toggle-container {
+            text-align: center;
+            margin: 15px 0;
+        }
+        
         @media (max-width: 600px) {
             .container {
                 padding: 20px;
@@ -248,9 +264,18 @@
     <p class="subtitle">Practica tu pronunciación en inglés</p>
     
     <div class="container">
-        <div class="input-group">
+        <div class="toggle-container">
+            <button id="toggle-textareas" class="toggle-button">Mostrar Cajas de Texto</button>
+        </div>
+        
+        <div class="input-group hidden" id="english-textarea">
             <label for="text-input">Texto en inglés (para convertir a voz):</label>
             <textarea id="text-input" rows="3" placeholder="Escribe o pega aquí la frase en inglés que quieres escuchar...">Who gets to choose the next show, you or me?</textarea>
+        </div>
+        
+        <div class="input-group hidden" id="guide-textarea">
+            <label for="guide-input">Caja de guía (para notas o traducción):</label>
+            <textarea id="guide-input" rows="3" class="readonly" placeholder="Aquí puedes colocar notas, traducción, o recordatorios..." readonly>¿Quién elige la siguiente serie para ver, tú o yo?</textarea>
         </div>
         
         <div class="controls">
@@ -284,11 +309,6 @@
         </div>
         
         <div class="status" id="status"></div>
-        
-        <div class="input-group">
-            <label for="guide-input">Caja de guía (para notas o traducción):</label>
-            <textarea id="guide-input" rows="3" class="readonly" placeholder="Aquí puedes colocar notas, traducción, o recordatorios..." readonly>¿Quién elige la siguiente serie para ver, tú o yo?</textarea>
-        </div>
         
         <div class="phrases-container">
             <div class="phrases-header" id="phrases-toggle">
@@ -325,6 +345,9 @@
             const phrasesContent = document.getElementById('phrases-content');
             const phrasesList = document.getElementById('phrases-list');
             const toggleIcon = document.getElementById('toggle-icon');
+            const toggleTextareasBtn = document.getElementById('toggle-textareas');
+            const englishTextarea = document.getElementById('english-textarea');
+            const guideTextarea = document.getElementById('guide-textarea');
             
             // URL del Google Sheets (formato CSV)
             const sheetsUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTVT70VI0YmQIOid3mrDfqQEQegpaJXSMiClAZATe0WwWyUeRjYvLYpJRAC_Nda0pMuw_l8GA7YxQ84/pub?output=csv';
@@ -521,35 +544,35 @@
             
             // Función para parsear una línea de CSV correctamente
             function parseCSVLine(line) {
-    const values = [];
-    let currentValue = '';
-    let insideQuotes = false;
-    
-    for (let i = 0; i < line.length; i++) {
-        const char = line[i];
-        
-        if (char === '"') {
-            // Si estamos dentro de comillas y el siguiente carácter también es comilla, es una comilla escapada
-            if (insideQuotes && i + 1 < line.length && line[i + 1] === '"') {
-                currentValue += '"';
-                i++; // Saltar la siguiente comilla
-            } else {
-                insideQuotes = !insideQuotes;
+                const values = [];
+                let currentValue = '';
+                let insideQuotes = false;
+                
+                for (let i = 0; i < line.length; i++) {
+                    const char = line[i];
+                    
+                    if (char === '"') {
+                        // Si estamos dentro de comillas y el siguiente carácter también es comilla, es una comilla escapada
+                        if (insideQuotes && i + 1 < line.length && line[i + 1] === '"') {
+                            currentValue += '"';
+                            i++; // Saltar la siguiente comilla
+                        } else {
+                            insideQuotes = !insideQuotes;
+                        }
+                    } else if (char === ',' && !insideQuotes) {
+                        // Fin de un valor - limpiar espacios y comillas sobrantes
+                        values.push(currentValue.trim().replace(/^"|"$/g, ''));
+                        currentValue = '';
+                    } else {
+                        currentValue += char;
+                    }
+                }
+                
+                // Añadir el último valor - limpiar espacios y comillas sobrantes
+                values.push(currentValue.trim().replace(/^"|"$/g, ''));
+                
+                return values;
             }
-        } else if (char === ',' && !insideQuotes) {
-            // Fin de un valor - limpiar espacios y comillas sobrantes
-            values.push(currentValue.trim().replace(/^"|"$/g, ''));
-            currentValue = '';
-        } else {
-            currentValue += char;
-        }
-    }
-    
-    // Añadir el último valor - limpiar espacios y comillas sobrantes
-    values.push(currentValue.trim().replace(/^"|"$/g, ''));
-    
-    return values;
-}
             
             // Función para cargar frases desde Google Sheets
             async function loadPhrasesFromSheets() {
@@ -601,6 +624,11 @@
                         textInput.value = phrase.Phrase;
                         guideInput.value = phrase.Guide || '';
                         
+                        // Mostrar las cajas de texto automáticamente
+                        if (!textareasVisible) {
+                            toggleTextareas();
+                        }
+                        
                         // Reproducir automáticamente si hay texto
                         if (phrase.Phrase && phrase.Phrase.trim() !== '') {
                             setTimeout(speakText, 300);
@@ -630,6 +658,25 @@
                     toggleIcon.textContent = '▼';
                 }
             });
+            
+            // Toggle para mostrar/ocultar las cajas de texto
+            let textareasVisible = false;
+            
+            function toggleTextareas() {
+                textareasVisible = !textareasVisible;
+                
+                if (textareasVisible) {
+                    englishTextarea.classList.remove('hidden');
+                    guideTextarea.classList.remove('hidden');
+                    toggleTextareasBtn.textContent = 'Ocultar Cajas de Texto';
+                } else {
+                    englishTextarea.classList.add('hidden');
+                    guideTextarea.classList.add('hidden');
+                    toggleTextareasBtn.textContent = 'Mostrar Cajas de Texto';
+                }
+            }
+            
+            toggleTextareasBtn.addEventListener('click', toggleTextareas);
             
             // Cargar las frases al iniciar
             loadPhrasesFromSheets();
