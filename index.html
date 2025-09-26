@@ -117,6 +117,50 @@
             margin: 30px 0;
         }
         
+        .playback-controls {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+        
+        .playback-btn {
+            background: linear-gradient(to right, #2575fc, #6a11cb);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            font-size: 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 10px rgba(37, 117, 252, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .playback-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px rgba(37, 117, 252, 0.4);
+        }
+        
+        .playback-btn:active {
+            transform: translateY(0);
+        }
+        
+        .playback-btn:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .playback-btn.active {
+            background: linear-gradient(to right, #ff6b6b, #ff8e53);
+            box-shadow: 0 4px 10px rgba(255, 107, 107, 0.3);
+        }
+        
         button {
             background: linear-gradient(to right, #2575fc, #6a11cb);
             color: white;
@@ -169,6 +213,13 @@
             color: #2575fc;
         }
         
+        .progress-info {
+            text-align: center;
+            margin: 10px 0;
+            font-size: 14px;
+            color: #666;
+        }
+        
         .phrases-container {
             margin-top: 20px;
             border: 1px solid #e0e0e0;
@@ -213,6 +264,11 @@
             background-color: #f0f5ff;
         }
         
+        .phrase-item.active {
+            background-color: #e3f2fd;
+            border-left: 4px solid #2575fc;
+        }
+        
         .phrase-item:last-child {
             border-bottom: none;
         }
@@ -250,6 +306,16 @@
             .control-group {
                 flex-direction: column;
                 gap: 10px;
+            }
+            
+            .playback-controls {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .playback-btn {
+                width: 100%;
+                max-width: 200px;
             }
             
             button {
@@ -304,9 +370,16 @@
             </div>
         </div>
         
-        <div class="button-container">
-            <button id="speak-button">Reproducir Audio</button>
+        <div class="playback-controls">
+            <button id="prev-btn" class="playback-btn">◀ Previous</button>
+            <button id="play-btn" class="playback-btn">▶️ Play</button>
+            <button id="pause-btn" class="playback-btn">⏸️ Pause</button>
+            <button id="next-btn" class="playback-btn">Next ▶</button>
+            <button id="shuffle-btn" class="playback-btn">🔀 Shuffle</button>
+            <button id="play-all-btn" class="playback-btn">🔁 Play All</button>
         </div>
+        
+        <div class="progress-info" id="progress-info">-</div>
         
         <div class="status" id="status"></div>
         
@@ -323,7 +396,7 @@
         </div>
         
         <div class="example">
-            <p><strong>Ejemplo de uso:</strong> Selecciona una frase de la lista o escribe tu propia frase en inglés, ajusta la voz y velocidad según tus necesidades, y haz clic en "Reproducir Audio" para escuchar la pronunciación.</p>
+            <p><strong>Ejemplo de uso:</strong> Selecciona una frase de la lista o usa los controles de reproducción para navegar entre las frases y practicar tu pronunciación.</p>
         </div>
     </div>
 
@@ -339,7 +412,6 @@
             const pitchValue = document.getElementById('pitch-value');
             const volumeInput = document.getElementById('volume');
             const volumeValue = document.getElementById('volume-value');
-            const speakButton = document.getElementById('speak-button');
             const status = document.getElementById('status');
             const phrasesToggle = document.getElementById('phrases-toggle');
             const phrasesContent = document.getElementById('phrases-content');
@@ -348,19 +420,36 @@
             const toggleTextareasBtn = document.getElementById('toggle-textareas');
             const englishTextarea = document.getElementById('english-textarea');
             const guideTextarea = document.getElementById('guide-textarea');
+            const progressInfo = document.getElementById('progress-info');
+            
+            // Botones de reproducción
+            const prevBtn = document.getElementById('prev-btn');
+            const playBtn = document.getElementById('play-btn');
+            const pauseBtn = document.getElementById('pause-btn');
+            const nextBtn = document.getElementById('next-btn');
+            const shuffleBtn = document.getElementById('shuffle-btn');
+            const playAllBtn = document.getElementById('play-all-btn');
             
             // URL del Google Sheets (formato CSV)
             const sheetsUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTVT70VI0YmQIOid3mrDfqQEQegpaJXSMiClAZATe0WwWyUeRjYvLYpJRAC_Nda0pMuw_l8GA7YxQ84/pub?output=csv';
             
+            // Variables de estado
+            let voices = [];
+            let phrases = [];
+            let currentPhraseIndex = 0;
+            let isShuffleMode = false;
+            let isPlayingAll = false;
+            let shuffleOrder = [];
+            
             // Verificar si el navegador soporta la Web Speech API
             if (!('speechSynthesis' in window)) {
                 status.textContent = 'Tu navegador no soporta la síntesis de voz. Por favor, usa Chrome, Edge o Safari.';
-                speakButton.disabled = true;
+                playBtn.disabled = true;
+                pauseBtn.disabled = true;
+                playAllBtn.disabled = true;
             }
             
             // Cargar las voces disponibles
-            let voices = [];
-            
             function loadVoices() {
                 voices = speechSynthesis.getVoices();
                 voiceSelect.innerHTML = '';
@@ -460,8 +549,10 @@
             });
             
             // Función para reproducir el texto
-            function speakText() {
-                if (textInput.value.trim() === '') {
+            function speakText(text = null) {
+                const textToSpeak = text || textInput.value.trim();
+                
+                if (textToSpeak === '') {
                     status.textContent = 'Por favor, ingresa un texto para reproducir.';
                     return;
                 }
@@ -470,7 +561,7 @@
                 speechSynthesis.cancel();
                 
                 // Crear el objeto de síntesis de voz
-                const utterance = new SpeechSynthesisUtterance(textInput.value.trim());
+                const utterance = new SpeechSynthesisUtterance(textToSpeak);
                 
                 // Configurar la voz seleccionada
                 const selectedVoice = voices.find(voice => voice.name === voiceSelect.value);
@@ -486,31 +577,176 @@
                 // Eventos para actualizar el estado
                 utterance.onstart = () => {
                     status.textContent = 'Reproduciendo...';
-                    speakButton.disabled = true;
+                    updatePlaybackButtons(true);
                 };
                 
                 utterance.onend = () => {
                     status.textContent = 'Reproducción completada.';
-                    speakButton.disabled = false;
+                    updatePlaybackButtons(false);
+                    
+                    // Si estamos reproduciendo todas las frases, pasar a la siguiente
+                    if (isPlayingAll) {
+                        setTimeout(() => {
+                            playNextPhrase();
+                        }, 1000);
+                    }
                 };
                 
                 utterance.onerror = (event) => {
                     status.textContent = 'Error al reproducir el audio: ' + event.error;
-                    speakButton.disabled = false;
+                    updatePlaybackButtons(false);
+                    isPlayingAll = false;
                 };
                 
                 // Reproducir
                 speechSynthesis.speak(utterance);
             }
             
-            // Asignar evento al botón
-            speakButton.addEventListener('click', speakText);
+            // Función para actualizar el estado de los botones de reproducción
+            function updatePlaybackButtons(isPlaying) {
+                playBtn.disabled = isPlaying;
+                pauseBtn.disabled = !isPlaying;
+                prevBtn.disabled = isPlaying;
+                nextBtn.disabled = isPlaying;
+                playAllBtn.disabled = isPlaying;
+                
+                if (isPlaying) {
+                    playBtn.textContent = '▶️ Playing...';
+                } else {
+                    playBtn.textContent = '▶️ Play';
+                }
+                
+                if (isPlayingAll) {
+                    playAllBtn.classList.add('active');
+                } else {
+                    playAllBtn.classList.remove('active');
+                }
+            }
             
-            // Permitir reproducir con Enter en el campo de texto
-            textInput.addEventListener('keydown', (event) => {
-                if (event.key === 'Enter' && event.ctrlKey) {
-                    event.preventDefault();
-                    speakText();
+            // Función para cargar una frase específica
+            function loadPhrase(index) {
+                if (phrases.length === 0 || index < 0 || index >= phrases.length) return;
+                
+                const phrase = phrases[index];
+                textInput.value = phrase.Phrase;
+                guideInput.value = phrase.Guide || '';
+                currentPhraseIndex = index;
+                
+                // Actualizar la frase activa en la lista
+                updateActivePhrase();
+                
+                // Actualizar información de progreso
+                progressInfo.textContent = `Frase ${index + 1} de ${phrases.length}`;
+            }
+            
+            // Función para reproducir la frase actual
+            function playCurrentPhrase() {
+                if (phrases.length === 0) return;
+                speakText(phrases[currentPhraseIndex].Phrase);
+            }
+            
+            // Función para reproducir la siguiente frase
+            function playNextPhrase() {
+                if (phrases.length === 0) return;
+                
+                let nextIndex;
+                
+                if (isShuffleMode) {
+                    // En modo aleatorio, usar el orden pregenerado
+                    const currentShuffleIndex = shuffleOrder.indexOf(currentPhraseIndex);
+                    nextIndex = shuffleOrder[(currentShuffleIndex + 1) % shuffleOrder.length];
+                } else {
+                    // En modo normal, siguiente en orden
+                    nextIndex = (currentPhraseIndex + 1) % phrases.length;
+                }
+                
+                loadPhrase(nextIndex);
+                playCurrentPhrase();
+            }
+            
+            // Función para reproducir la frase anterior
+            function playPrevPhrase() {
+                if (phrases.length === 0) return;
+                
+                let prevIndex;
+                
+                if (isShuffleMode) {
+                    // En modo aleatorio, usar el orden pregenerado
+                    const currentShuffleIndex = shuffleOrder.indexOf(currentPhraseIndex);
+                    prevIndex = shuffleOrder[(currentShuffleIndex - 1 + shuffleOrder.length) % shuffleOrder.length];
+                } else {
+                    // En modo normal, anterior en orden
+                    prevIndex = (currentPhraseIndex - 1 + phrases.length) % phrases.length;
+                }
+                
+                loadPhrase(prevIndex);
+                playCurrentPhrase();
+            }
+            
+            // Función para actualizar la frase activa en la lista
+            function updateActivePhrase() {
+                const phraseItems = document.querySelectorAll('.phrase-item');
+                phraseItems.forEach((item, index) => {
+                    if (index === currentPhraseIndex) {
+                        item.classList.add('active');
+                    } else {
+                        item.classList.remove('active');
+                    }
+                });
+            }
+            
+            // Función para generar un orden aleatorio
+            function generateShuffleOrder() {
+                shuffleOrder = [];
+                for (let i = 0; i < phrases.length; i++) {
+                    shuffleOrder.push(i);
+                }
+                
+                // Algoritmo de Fisher-Yates para mezclar
+                for (let i = shuffleOrder.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [shuffleOrder[i], shuffleOrder[j]] = [shuffleOrder[j], shuffleOrder[i]];
+                }
+            }
+            
+            // Event listeners para los botones de reproducción
+            playBtn.addEventListener('click', playCurrentPhrase);
+            
+            pauseBtn.addEventListener('click', () => {
+                speechSynthesis.cancel();
+                status.textContent = 'Reproducción pausada.';
+                updatePlaybackButtons(false);
+                isPlayingAll = false;
+            });
+            
+            nextBtn.addEventListener('click', playNextPhrase);
+            
+            prevBtn.addEventListener('click', playPrevPhrase);
+            
+            shuffleBtn.addEventListener('click', () => {
+                isShuffleMode = !isShuffleMode;
+                if (isShuffleMode) {
+                    shuffleBtn.classList.add('active');
+                    generateShuffleOrder();
+                    status.textContent = 'Modo aleatorio activado.';
+                } else {
+                    shuffleBtn.classList.remove('active');
+                    status.textContent = 'Modo secuencial activado.';
+                }
+            });
+            
+            playAllBtn.addEventListener('click', () => {
+                if (phrases.length === 0) return;
+                
+                isPlayingAll = !isPlayingAll;
+                
+                if (isPlayingAll) {
+                    status.textContent = 'Reproduciendo todas las frases...';
+                    playCurrentPhrase();
+                } else {
+                    speechSynthesis.cancel();
+                    status.textContent = 'Reproducción de todas las frases cancelada.';
+                    updatePlaybackButtons(false);
                 }
             });
             
@@ -581,10 +817,15 @@
                     const csvText = await response.text();
                     
                     // Parsear CSV correctamente
-                    const phrases = parseCSV(csvText);
+                    phrases = parseCSV(csvText);
                     
                     // Mostrar las frases en la lista
                     displayPhrases(phrases);
+                    
+                    // Cargar la primera frase si hay frases disponibles
+                    if (phrases.length > 0) {
+                        loadPhrase(0);
+                    }
                     
                 } catch (error) {
                     console.error('Error al cargar las frases:', error);
@@ -601,12 +842,13 @@
                 
                 phrasesList.innerHTML = '';
                 
-                phrases.forEach(phrase => {
+                phrases.forEach((phrase, index) => {
                     // Verificar que la frase tenga contenido
                     if (!phrase.Phrase || phrase.Phrase.trim() === '') return;
                     
                     const phraseItem = document.createElement('div');
                     phraseItem.className = 'phrase-item';
+                    if (index === 0) phraseItem.classList.add('active');
                     
                     const phraseText = document.createElement('div');
                     phraseText.className = 'phrase-text';
@@ -621,12 +863,10 @@
                     
                     // Al hacer clic en una frase, cargarla en los campos
                     phraseItem.addEventListener('click', () => {
-                        textInput.value = phrase.Phrase;
-                        guideInput.value = phrase.Guide || '';
-                                                                   
+                        loadPhrase(index);
                         // Reproducir automáticamente si hay texto
                         if (phrase.Phrase && phrase.Phrase.trim() !== '') {
-                            setTimeout(speakText, 300);
+                            setTimeout(playCurrentPhrase, 300);
                         }
                     });
                     
