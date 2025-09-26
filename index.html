@@ -623,12 +623,7 @@
                     phraseItem.addEventListener('click', () => {
                         textInput.value = phrase.Phrase;
                         guideInput.value = phrase.Guide || '';
-                        
-                        // Mostrar las cajas de texto automáticamente
-                        if (!textareasVisible) {
-                            toggleTextareas();
-                        }
-                        
+                                                                   
                         // Reproducir automáticamente si hay texto
                         if (phrase.Phrase && phrase.Phrase.trim() !== '') {
                             setTimeout(speakText, 300);
