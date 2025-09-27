@@ -161,6 +161,11 @@
             box-shadow: 0 4px 10px rgba(255, 107, 107, 0.3);
         }
         
+        .playback-btn.loop-active {
+            background: linear-gradient(to right, #4cd964, #5ac8fa);
+            box-shadow: 0 4px 10px rgba(76, 217, 100, 0.3);
+        }
+        
         button {
             background: linear-gradient(to right, #2575fc, #6a11cb);
             color: white;
@@ -376,6 +381,7 @@
             <button id="pause-btn" class="playback-btn">⏸️ Pause</button>
             <button id="next-btn" class="playback-btn">Next ▶</button>
             <button id="shuffle-btn" class="playback-btn">🔀 Shuffle</button>
+            <button id="loop-btn" class="playback-btn">🔂 Loop</button>
             <button id="play-all-btn" class="playback-btn">🔁 Play All</button>
         </div>
         
@@ -428,6 +434,7 @@
             const pauseBtn = document.getElementById('pause-btn');
             const nextBtn = document.getElementById('next-btn');
             const shuffleBtn = document.getElementById('shuffle-btn');
+            const loopBtn = document.getElementById('loop-btn');
             const playAllBtn = document.getElementById('play-all-btn');
             
             // URL del Google Sheets (formato CSV)
@@ -439,6 +446,7 @@
             let currentPhraseIndex = 0;
             let isShuffleMode = false;
             let isPlayingAll = false;
+            let isLoopMode = false;
             let shuffleOrder = [];
             
             // Verificar si el navegador soporta la Web Speech API
@@ -447,6 +455,7 @@
                 playBtn.disabled = true;
                 pauseBtn.disabled = true;
                 playAllBtn.disabled = true;
+                loopBtn.disabled = true;
             }
             
             // Cargar las voces disponibles
@@ -584,8 +593,14 @@
                     status.textContent = 'Reproducción completada.';
                     updatePlaybackButtons(false);
                     
+                    // Si estamos en modo loop, repetir la misma frase
+                    if (isLoopMode) {
+                        setTimeout(() => {
+                            playCurrentPhrase();
+                        }, 500);
+                    }
                     // Si estamos reproduciendo todas las frases, pasar a la siguiente
-                    if (isPlayingAll) {
+                    else if (isPlayingAll) {
                         setTimeout(() => {
                             playNextPhrase();
                         }, 1000);
@@ -596,6 +611,7 @@
                     status.textContent = 'Error al reproducir el audio: ' + event.error;
                     updatePlaybackButtons(false);
                     isPlayingAll = false;
+                    isLoopMode = false;
                 };
                 
                 // Reproducir
@@ -609,6 +625,7 @@
                 prevBtn.disabled = isPlaying;
                 nextBtn.disabled = isPlaying;
                 playAllBtn.disabled = isPlaying;
+                loopBtn.disabled = isPlaying && !isLoopMode;
                 
                 if (isPlaying) {
                     playBtn.textContent = '▶️ Playing...';
@@ -620,6 +637,12 @@
                     playAllBtn.classList.add('active');
                 } else {
                     playAllBtn.classList.remove('active');
+                }
+                
+                if (isLoopMode) {
+                    loopBtn.classList.add('loop-active');
+                } else {
+                    loopBtn.classList.remove('loop-active');
                 }
             }
             
@@ -717,6 +740,7 @@
                 status.textContent = 'Reproducción pausada.';
                 updatePlaybackButtons(false);
                 isPlayingAll = false;
+                isLoopMode = false;
             });
             
             nextBtn.addEventListener('click', playNextPhrase);
@@ -735,10 +759,25 @@
                 }
             });
             
+            loopBtn.addEventListener('click', () => {
+                isLoopMode = !isLoopMode;
+                if (isLoopMode) {
+                    status.textContent = 'Modo loop activado. Repitiendo frase actual.';
+                    // Iniciar reproducción si no está reproduciendo
+                    if (!speechSynthesis.speaking) {
+                        playCurrentPhrase();
+                    }
+                } else {
+                    status.textContent = 'Modo loop desactivado.';
+                }
+                updatePlaybackButtons(speechSynthesis.speaking);
+            });
+            
             playAllBtn.addEventListener('click', () => {
                 if (phrases.length === 0) return;
                 
                 isPlayingAll = !isPlayingAll;
+                isLoopMode = false; // Desactivar loop cuando se activa play all
                 
                 if (isPlayingAll) {
                     status.textContent = 'Reproduciendo todas las frases...';
